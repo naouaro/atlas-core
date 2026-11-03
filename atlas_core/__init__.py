@@ -7,8 +7,10 @@ any data — not just code.
 """
 from __future__ import annotations
 
+from .engine.glossary import Glossary, GlossaryEntry
 from .engine.pipeline import Atlas
 from .models import Link, Narrative, Node, Topic
 
 __version__ = "0.1.0"
-__all__ = ["Atlas", "Node", "Link", "Topic", "Narrative", "__version__"]
+__all__ = ["Atlas", "Node", "Link", "Topic", "Narrative",
+           "Glossary", "GlossaryEntry", "__version__"]

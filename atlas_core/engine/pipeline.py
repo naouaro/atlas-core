@@ -13,12 +13,17 @@ offline path when no cloud model is configured.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ..models import Link, Narrative, Node, Topic
 from ..providers.base import EmbeddingProvider, LLMProvider
 from ..store.base import VectorStore
 from ..store.memory import InMemoryVectorStore
 from . import cluster as _cluster
 from . import summarize as _sum
+
+if TYPE_CHECKING:
+    from .glossary import Glossary
 
 
 class Atlas:
@@ -122,7 +127,12 @@ class Atlas:
 
     # ── query ─────────────────────────────────────────────────────────────
     def search(self, query: str, k: int = 10, kind: str | None = None,
-               group: str | None = None) -> list[tuple[Node, float]]:
+               group: str | None = None, expand: "Glossary | None" = None
+               ) -> list[tuple[Node, float]]:
+        """Semantic search. If `expand` (a Glossary) is given, the query is first
+        enriched with any domain vocabulary it mentions before embedding."""
+        if expand is not None:
+            query = expand.expand_query(query)
         qv = self.embedder.embed([query])[0]
         return self.store.search(qv, k=k, kind=kind, group=group)
 

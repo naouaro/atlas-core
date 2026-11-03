@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-MIT-3B82F6.svg" alt="MIT">
+  <img src="https://img.shields.io/badge/license-Apache%202.0-3B82F6.svg" alt="Apache 2.0">
   <img src="https://img.shields.io/badge/python-3.10%2B-4F46E5.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/tests-passing-22C55E.svg" alt="tests passing">
   <img src="https://img.shields.io/badge/status-v0.1%20alpha-7C3AED.svg" alt="v0.1">
@@ -140,6 +140,25 @@ atlas.sync(ing.nodes(), ing.links())      # first run embeds; re-runs embed only
 See `examples/sqldb_demo.py` for the rows→nodes / FKs→links pattern end-to-end, and
 `deploy/` for packaging a sync as a scheduled Lambda (EventBridge → container image).
 
+## 🔗 Use it from an agent (+ a domain glossary)
+
+Expose the map to any LangChain / LangGraph agent as a search tool:
+
+```python
+from atlas_core.integrations.langchain import atlas_search_tool   # pip install "atlas-core[langchain]"
+tool = atlas_search_tool(atlas, kind="course")   # drop into your agent's tool list
+```
+
+Teach it your business vocabulary — map terms (+ aliases) to nodes, and let a query
+be enriched before it is embedded:
+
+```python
+from atlas_core import Glossary
+g = Glossary()
+g.add("شهادة", node_ids=["c1"], aliases=["certificate"], definition="وثيقة إتمام الدورة")
+atlas.search("how do I issue a certificate?", expand=g)   # query → + Arabic canonical + definition
+```
+
 ## 💡 Use cases
 
 Help-center & knowledge-base search · course/LMS content maps · support-ticket
@@ -151,9 +170,9 @@ retrieval+topic layer under a RAG or agent stack.
 - ✅ Incremental re-index (embed only what changed) — `atlas.sync()`
 - ✅ Reference ingester for relational data — `SqlIngester` (+ SQLite demo)
 - ✅ Scheduled cloud sync recipe (EventBridge → Lambda) — `deploy/`
-- Glossary: business-term ↔ node mapping
-- LangChain tool adapter
+- ✅ Glossary: business-term ↔ node mapping — `Glossary`
+- ✅ LangChain tool adapter — `atlas_core.integrations.langchain`
 
 ## License
 
-MIT © 2026 — contributions welcome once public.
+Apache-2.0 © 2026 — contributions welcome once public.
