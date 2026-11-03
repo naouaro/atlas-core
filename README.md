@@ -36,8 +36,9 @@ describe in plain language — in any language.
 
 ## ✨ What you get
 
-- 🔎 **Semantic search** — find by meaning, not keywords (Arabic, Turkish, English, mixed).
-- 🗂️ **Automatic topic discovery** — k-means over embeddings, auto-labeled clusters.
+- 🔎 **Semantic + hybrid search** — by meaning, with an optional lexical rerank (`hybrid=True`) when exact terms matter. Arabic, Turkish, English, mixed.
+- ✂️ **Long-doc chunking** — split long content into overlapping passages so buried points stay findable.
+- 🗂️ **Automatic topic discovery** — k-means over embeddings (mini-batch at scale), auto-labeled clusters.
 - 📝 **Summaries & narratives** — one-line per item + a prose overview of the whole map.
 - 🔌 **Pluggable everything** — embeddings/LLM (Local · Bedrock · OpenAI · your own) and storage (in-memory · Postgres+pgvector).
 - 🌍 **Multilingual & multi-tenant** — first-class Arabic & Turkish (Turkish-safe casefolding); isolate many workspaces in one store.
@@ -89,10 +90,10 @@ store = PgVectorStore(dsn="postgresql://…", dim=emb.dim, tenant="my_workspace"
 atlas = Atlas(embedder=emb, store=store, llm=BedrockLLMProvider(region="us-east-1"))
 ```
 
-> Benchmarked on a real 89-article Arabic help center: topic clustering landed clean
-> groups (payments, certificates, DNS, integrations …) and `"ربط بوابة دفع واستلام
-> الأرباح"` returned the payout + Stripe + payment-gateway articles as the top hits —
-> with **zero** manual tagging.
+> Illustrative internal run over an ~89-article Arabic help center: topic clustering
+> landed clean groups (payments, certificates, DNS, integrations …) and `"ربط بوابة دفع
+> واستلام الأرباح"` returned the payout + Stripe + payment-gateway articles as top hits,
+> with **zero** manual tagging. Run `examples/quickstart.py` for a small, reproducible version.
 
 ## 🧱 Architecture
 
@@ -159,6 +160,14 @@ g.add("شهادة", node_ids=["c1"], aliases=["certificate"], definition="وثي
 atlas.search("how do I issue a certificate?", expand=g)   # query → + Arabic canonical + definition
 ```
 
+For long content and exact-term queries:
+
+```python
+from atlas_core.ingest.documents import DocumentIngester
+ing = DocumentIngester(docs, chunk_chars=1500)     # long docs → overlapping chunk nodes
+atlas.search("invoice VAT", hybrid=True)           # blend vector similarity + lexical rerank
+```
+
 ## 💡 Use cases
 
 Help-center & knowledge-base search · course/LMS content maps · support-ticket
@@ -172,6 +181,10 @@ retrieval+topic layer under a RAG or agent stack.
 - ✅ Scheduled cloud sync recipe (EventBridge → Lambda) — `deploy/`
 - ✅ Glossary: business-term ↔ node mapping — `Glossary`
 - ✅ LangChain tool adapter — `atlas_core.integrations.langchain`
+- ✅ Long-document chunking — `chunk_text` / `DocumentIngester(chunk_chars=…)`
+- ✅ Hybrid retrieval (vector + lexical rerank) — `search(hybrid=True)`
+- Learned re-ranking (cross-encoder) + BM25 / full-text fusion
+- Reproducible retrieval benchmark harness
 
 ## License
 

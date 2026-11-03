@@ -19,6 +19,7 @@ from ..models import Link, Narrative, Node, Topic
 from ..providers.base import EmbeddingProvider, LLMProvider
 from ..store.base import VectorStore
 from ..store.memory import InMemoryVectorStore
+from ..textnorm import tokens as _tokens
 from . import cluster as _cluster
 from . import summarize as _sum
 
@@ -127,14 +128,32 @@ class Atlas:
 
     # ── query ─────────────────────────────────────────────────────────────
     def search(self, query: str, k: int = 10, kind: str | None = None,
-               group: str | None = None, expand: "Glossary | None" = None
-               ) -> list[tuple[Node, float]]:
-        """Semantic search. If `expand` (a Glossary) is given, the query is first
-        enriched with any domain vocabulary it mentions before embedding."""
+               group: str | None = None, expand: "Glossary | None" = None,
+               hybrid: bool = False, alpha: float = 0.6) -> list[tuple[Node, float]]:
+        """Semantic search.
+
+        `expand` (a Glossary) enriches the query with domain vocabulary before
+        embedding. `hybrid=True` reranks the vector candidates by blending cosine with
+        lexical token-overlap — ``alpha``·vector + ``(1-alpha)``·lexical — which is
+        language-agnostic (Arabic/Turkish/Latin) and helps when exact terms matter.
+        """
         if expand is not None:
             query = expand.expand_query(query)
         qv = self.embedder.embed([query])[0]
-        return self.store.search(qv, k=k, kind=kind, group=group)
+        if not hybrid:
+            return self.store.search(qv, k=k, kind=kind, group=group)
+        # oversample on the vector side, then blend in a lexical overlap score.
+        cand = self.store.search(qv, k=max(k * 5, 20), kind=kind, group=group)
+        qtok = set(_tokens(query, min_len=2))
+        if not qtok:
+            return cand[:k]
+        rescored = []
+        for node, vsim in cand:
+            dtok = set(_tokens(f"{node.name} {node.text}", min_len=2))
+            lex = len(qtok & dtok) / len(qtok)
+            rescored.append((node, alpha * vsim + (1.0 - alpha) * lex))
+        rescored.sort(key=lambda nx: -nx[1])
+        return rescored[:k]
 
     def related(self, node_id: str) -> list[Link]:
         return self.store.links_for(node_id)

@@ -14,7 +14,7 @@ from .base import VectorStore
 class InMemoryVectorStore(VectorStore):
     def __init__(self) -> None:
         self._nodes: dict[str, Node] = {}
-        self._links: list[Link] = []
+        self._links: dict[tuple, Link] = {}      # keyed by (src, dst, type) → idempotent
         self._topics: dict[tuple, Topic] = {}   # keyed by (group, id)
 
     def upsert_nodes(self, nodes: list[Node]) -> None:
@@ -55,10 +55,13 @@ class InMemoryVectorStore(VectorStore):
         return n
 
     def upsert_links(self, links: list[Link]) -> None:
-        self._links.extend(links)
+        # idempotent: re-upserting the same edge replaces it (no unbounded growth).
+        for l in links:
+            self._links[(l.src, l.dst, l.type)] = l
 
     def links_for(self, node_id: str) -> list[Link]:
-        return [l for l in self._links if l.src == node_id or l.dst == node_id]
+        return [l for l in self._links.values()
+                if l.src == node_id or l.dst == node_id]
 
     def upsert_topics(self, topics: list[Topic]) -> None:
         for t in topics:

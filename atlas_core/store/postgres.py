@@ -1,7 +1,8 @@
 """atlas_core.store.postgres — Postgres + pgvector backend (production).
 
-`pip install atlas-core[postgres]` (psycopg + pgvector). Persistent, scales to
-millions of nodes, cosine search via pgvector. Optional per-tenant isolation:
+`pip install atlas-core[postgres]` (psycopg + pgvector). Persistent; cosine *search*
+scales to large corpora via pgvector (clustering/narration load vectors in memory, so
+size that step for your RAM — mini-batch k-means keeps it bounded). Per-tenant isolation:
 pass `tenant` and it is stored + filtered on every query (a lightweight stand-in
 for row-level security — enable real RLS in your own deployment if needed).
 
@@ -83,9 +84,11 @@ class PgVectorStore(VectorStore):
         q = f"SELECT {self._COLS} FROM {self.N} WHERE tenant=%s"
         p = [self.tenant]
         if kind:
-            q += " AND kind=%s"; p.append(kind)
+            q += " AND kind=%s"
+            p.append(kind)
         if group is not None:
-            q += " AND node_group=%s"; p.append(group)
+            q += " AND node_group=%s"
+            p.append(group)
         return [self._row(r) for r in self._conn.execute(q, p).fetchall()]
 
     def search(self, vector: list[float], k: int = 10, kind: str | None = None,
@@ -94,9 +97,11 @@ class PgVectorStore(VectorStore):
              f"WHERE tenant=%s AND embedding IS NOT NULL")
         p: list = [vector, self.tenant]
         if kind:
-            q += " AND kind=%s"; p.append(kind)
+            q += " AND kind=%s"
+            p.append(kind)
         if group is not None:
-            q += " AND node_group=%s"; p.append(group)
+            q += " AND node_group=%s"
+            p.append(group)
         q += " ORDER BY embedding<=>%s::vector LIMIT %s"
         p += [vector, k]
         return [(self._row(r), float(r[10])) for r in self._conn.execute(q, p).fetchall()]
@@ -110,11 +115,22 @@ class PgVectorStore(VectorStore):
             return cur.rowcount or 0
 
     def upsert_links(self, links: list[Link]) -> None:
+        # Idempotent: replace any existing (src,dst,type) edge for this tenant, then
+        # insert. A scheduled job re-sends all edges every run, so a plain INSERT would
+        # grow the table without bound; delete-then-insert keeps it stable and needs no
+        # unique constraint (works on pre-existing tables too). Dedupe the batch first.
+        if not links:
+            return
+        dedup = {(l.src, l.dst, l.type): l for l in links}
         with self._conn.cursor() as cur:
-            for l in links:
-                cur.execute(f"INSERT INTO {self.L} (tenant,src,dst,type,weight,attrs) "
-                            f"VALUES (%s,%s,%s,%s,%s,%s)",
-                            (self.tenant, l.src, l.dst, l.type, l.weight, json.dumps(l.attrs)))
+            cur.executemany(
+                f"DELETE FROM {self.L} WHERE tenant=%s AND src=%s AND dst=%s AND type=%s",
+                [(self.tenant, s, d, t) for (s, d, t) in dedup])
+            cur.executemany(
+                f"INSERT INTO {self.L} (tenant,src,dst,type,weight,attrs) "
+                f"VALUES (%s,%s,%s,%s,%s,%s)",
+                [(self.tenant, l.src, l.dst, l.type, l.weight, json.dumps(l.attrs))
+                 for l in dedup.values()])
 
     def links_for(self, node_id: str) -> list[Link]:
         rows = self._conn.execute(

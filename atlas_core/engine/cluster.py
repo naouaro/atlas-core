@@ -40,10 +40,18 @@ def cluster_nodes(nodes: list[Node], llm=None, k: int | None = None,
             n.topic_id = 0
         return [t] if pool else []
 
-    from sklearn.cluster import KMeans  # noqa: PLC0415
     k = k or _auto_k(len(pool))
     mat = np.asarray([n.embedding for n in pool], dtype=np.float32)
-    labels = KMeans(n_clusters=k, n_init=10, random_state=42).fit_predict(mat)
+    # MiniBatchKMeans for large maps: bounded memory + far faster, negligible quality
+    # loss at these cluster counts. (Memory at scale is dominated by holding the node
+    # vectors here, not the fit — mini-batch keeps the fit itself cheap.)
+    if len(pool) > 10_000:
+        from sklearn.cluster import MiniBatchKMeans  # noqa: PLC0415
+        km = MiniBatchKMeans(n_clusters=k, n_init=3, random_state=42, batch_size=2048)
+    else:
+        from sklearn.cluster import KMeans  # noqa: PLC0415
+        km = KMeans(n_clusters=k, n_init=10, random_state=42)
+    labels = km.fit_predict(mat)
 
     topics: list[Topic] = []
     offline = llm is None or getattr(llm, "offline", False)
