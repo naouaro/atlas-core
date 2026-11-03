@@ -188,4 +188,4 @@ retrieval+topic layer under a RAG or agent stack.
 
 ## License
 
-Apache-2.0 © 2026 — contributions welcome once public.
+Apache-2.0 © 2026 — contributions welcome.
