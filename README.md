@@ -149,10 +149,10 @@ retrieval+topic layer under a RAG or agent stack.
 ## 🗺️ Roadmap
 
 - ✅ Incremental re-index (embed only what changed) — `atlas.sync()`
-- ✅ Reference ingester for relational data — `SqlIngester` (+ full LMS example)
+- ✅ Reference ingester for relational data — `SqlIngester` (+ SQLite demo)
+- ✅ Scheduled cloud sync recipe (EventBridge → Lambda) — `deploy/`
 - Glossary: business-term ↔ node mapping
 - LangChain tool adapter
-- Scheduled cloud sync recipe (EventBridge → Lambda)
 
 ## License
 
