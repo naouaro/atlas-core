@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/python-3.10%2B-4F46E5.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/tests-passing-22C55E.svg" alt="tests passing">
   <img src="https://img.shields.io/badge/status-v0.1%20alpha-7C3AED.svg" alt="v0.1">
-  <img src="https://img.shields.io/badge/multilingual-Arabic%20✓-06B6D4.svg" alt="multilingual">
+  <img src="https://img.shields.io/badge/multilingual-Arabic%20·%20Turkish%20✓-06B6D4.svg" alt="multilingual">
 </p>
 
 ---
@@ -36,11 +36,11 @@ describe in plain language — in any language.
 
 ## ✨ What you get
 
-- 🔎 **Semantic search** — find by meaning, not keywords (works in Arabic, English, mixed).
+- 🔎 **Semantic search** — find by meaning, not keywords (Arabic, Turkish, English, mixed).
 - 🗂️ **Automatic topic discovery** — k-means over embeddings, auto-labeled clusters.
 - 📝 **Summaries & narratives** — one-line per item + a prose overview of the whole map.
 - 🔌 **Pluggable everything** — embeddings/LLM (Local · Bedrock · OpenAI · your own) and storage (in-memory · Postgres+pgvector).
-- 🌍 **Multilingual & multi-tenant** — first-class Arabic; isolate many workspaces in one store.
+- 🌍 **Multilingual & multi-tenant** — first-class Arabic & Turkish (Turkish-safe casefolding); isolate many workspaces in one store.
 - 🔁 **Live incremental sync** — `atlas.sync()` re-embeds only what changed (content-hashed), reuses unchanged, and prunes deletes — the body of a scheduled update job.
 - 🧭 **Two-level scoping** — one index, searchable per sub-tenant (`group`, e.g. per-academy) or globally.
 - 🪶 **Runs offline, zero cloud** — clone, `pip install`, run. Scale up to pgvector when ready.

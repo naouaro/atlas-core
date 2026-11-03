@@ -12,6 +12,7 @@ from collections import Counter
 import numpy as np
 
 from ..models import Node, Topic
+from ..textnorm import fold
 
 _TOKEN = re.compile(r"[^\W_]{3,}", re.UNICODE)
 
@@ -23,7 +24,7 @@ def _auto_k(n: int) -> int:
 def _heuristic_label(names: list[str]) -> str:
     c: Counter = Counter()
     for nm in names:
-        for t in _TOKEN.findall((nm or "").lower()):
+        for t in _TOKEN.findall(fold(nm or "")):
             c[t] += 1
     common = [w for w, _ in c.most_common(3)]
     return " / ".join(common) if common else "topic"

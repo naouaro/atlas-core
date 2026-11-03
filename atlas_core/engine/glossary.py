@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ..textnorm import fold
+
 
 @dataclass(slots=True)
 class GlossaryEntry:
@@ -42,7 +44,7 @@ class Glossary:
         canon = (term or "").strip()
         if not canon:
             raise ValueError("term must be non-empty")
-        key = canon.lower()
+        key = fold(canon)
         entry = self._entries.get(key)
         if entry is None:
             entry = GlossaryEntry(term=canon)
@@ -55,7 +57,7 @@ class Glossary:
             a = (a or "").strip()
             if a and a not in entry.aliases:
                 entry.aliases.append(a)
-                self._surface[a.lower()] = key
+                self._surface[fold(a)] = key
         if definition:
             entry.definition = definition
         return entry
@@ -68,12 +70,12 @@ class Glossary:
 
     def get(self, term: str) -> GlossaryEntry | None:
         """Look up an entry by its canonical term OR any alias."""
-        key = self._surface.get((term or "").strip().lower())
+        key = self._surface.get(fold((term or "").strip()))
         return self._entries.get(key) if key else None
 
     def resolve(self, text: str) -> list[GlossaryEntry]:
         """Declared terms/aliases that appear (case-insensitive) in ``text``."""
-        low = (text or "").lower()
+        low = fold(text or "")
         found: dict[str, GlossaryEntry] = {}
         for surface, canon in self._surface.items():
             if surface and surface in low:
@@ -92,7 +94,7 @@ class Glossary:
             return query
         extra: list[str] = []
         for e in hits:
-            if e.term.lower() not in (query or "").lower():
+            if fold(e.term) not in fold(query or ""):
                 extra.append(e.term)
             if e.definition:
                 extra.append(e.definition)

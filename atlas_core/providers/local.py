@@ -2,7 +2,7 @@
 
 `LocalEmbeddingProvider`:
   - if `sentence-transformers` is installed, uses a real MULTILINGUAL model
-    (handles Arabic and other non-English content);
+    (handles Arabic, Turkish, and other non-English content);
   - otherwise falls back to a deterministic hashed bag-of-tokens embedding so
     the library still imports, runs, and gives *some* semantic signal with no
     dependencies at all (good for CI, tests, and a clone-and-run demo).
@@ -14,19 +14,12 @@ from __future__ import annotations
 
 import hashlib
 import math
-import re
 
+from ..textnorm import tokens as _tokens
 from .base import EmbeddingProvider, LLMProvider
 
-# Unicode-aware tokenizer: keep letter/digit runs across scripts (Arabic incl.).
-_TOKEN = re.compile(r"[^\W_]+", re.UNICODE)
-
-#: A compact, widely-available multilingual sentence model (good Arabic support).
+#: A compact, widely-available multilingual sentence model (Arabic, Turkish, +50 langs).
 DEFAULT_ST_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-
-
-def _tokens(text: str) -> list[str]:
-    return [t.lower() for t in _TOKEN.findall(text or "")]
 
 
 class LocalEmbeddingProvider(EmbeddingProvider):
