@@ -79,7 +79,10 @@ class Atlas:
                      if n.id not in incoming]
             pruned = self.store.delete_nodes(stale)
         return {"total": len(nodes), "reembedded": len(to_embed),
-                "reused": len(nodes) - len(to_embed), "pruned": pruned}
+                "reused": len(nodes) - len(to_embed), "pruned": pruned,
+                # nothing new/changed/removed → existing topics + narrative still
+                # hold; callers can skip the (expensive) cluster()/narrate() pass.
+                "changed": bool(to_embed) or pruned > 0}
 
     def embed_all(self, batch: int = 128) -> int:
         todo = [n for n in self.store.all_nodes() if n.embedding is None]

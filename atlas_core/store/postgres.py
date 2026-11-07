@@ -40,9 +40,52 @@ class PgVectorStore(VectorStore):
         self._conn.execute(
             f"CREATE TABLE IF NOT EXISTS {self.L} (tenant text, src text, dst text, "
             f"type text, weight float, attrs jsonb)")
+        self._ensure_link_key()
         self._conn.execute(
             f"CREATE TABLE IF NOT EXISTS {self.T} (tenant text, id int, label text, "
             f"description text, node_ids jsonb, PRIMARY KEY (tenant, id))")
+
+    # ── links: one row per (tenant, src, dst, type), enforced by the database ──
+    def _ensure_link_key(self) -> None:
+        """Guarantee the links table has a UNIQUE key on (tenant, src, dst, type).
+
+        The key is what makes `upsert_links` a single atomic ON CONFLICT upsert, so a
+        scheduled re-sync can never grow the table — regardless of library version,
+        concurrent runs, or a crash mid-write. Tables created by older versions may
+        already hold duplicates (plain INSERT on every run); they are collapsed here
+        once, inside one transaction, under an advisory lock so two processes starting
+        together don't race. Also adds (tenant, dst) for `links_for` lookups.
+        """
+        uq = f"{self.L}_uq"
+        if self._index_exists(uq):
+            return
+        with self._conn.transaction():
+            self._conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (self.L,))
+            if self._index_exists(uq):          # another process just did it
+                return
+            dupes = self._conn.execute(
+                f"SELECT EXISTS (SELECT 1 FROM {self.L} GROUP BY tenant,src,dst,type "
+                f"HAVING count(*) > 1)").fetchone()[0]
+            if dupes:
+                # Rebuild instead of row-by-row DELETE: one sort + rewrite, fast even
+                # for millions of rows. Keeps one copy per key (copies of a re-sent
+                # edge are identical; the next sync rewrites weight/attrs anyway).
+                tmp = f"{self.L}_dedup"
+                self._conn.execute(
+                    f"CREATE TEMP TABLE {tmp} ON COMMIT DROP AS SELECT DISTINCT ON "
+                    f"(tenant,src,dst,type) tenant,src,dst,type,weight,attrs FROM {self.L}")
+                self._conn.execute(f"TRUNCATE {self.L}")
+                self._conn.execute(
+                    f"INSERT INTO {self.L} (tenant,src,dst,type,weight,attrs) "
+                    f"SELECT tenant,src,dst,type,weight,attrs FROM {tmp}")
+            self._conn.execute(
+                f"CREATE UNIQUE INDEX IF NOT EXISTS {uq} ON {self.L} (tenant,src,dst,type)")
+            self._conn.execute(
+                f"CREATE INDEX IF NOT EXISTS {self.L}_dst ON {self.L} (tenant,dst)")
+
+    def _index_exists(self, name: str) -> bool:
+        return self._conn.execute(
+            "SELECT to_regclass(%s) IS NOT NULL", (name,)).fetchone()[0]
 
     def upsert_nodes(self, nodes: list[Node]) -> None:
         with self._conn.cursor() as cur:
@@ -109,26 +152,31 @@ class PgVectorStore(VectorStore):
     def delete_nodes(self, ids: list[str]) -> int:
         if not ids:
             return 0
-        with self._conn.cursor() as cur:
+        with self._conn.transaction(), self._conn.cursor() as cur:
+            # drop edges touching removed nodes too, so pruning leaves no dangling links
+            cur.execute(f"DELETE FROM {self.L} WHERE tenant=%s AND "
+                        f"(src = ANY(%s) OR dst = ANY(%s))",
+                        (self.tenant, list(ids), list(ids)))
             cur.execute(f"DELETE FROM {self.N} WHERE tenant=%s AND id = ANY(%s)",
                         (self.tenant, list(ids)))
             return cur.rowcount or 0
 
     def upsert_links(self, links: list[Link]) -> None:
-        # Idempotent: replace any existing (src,dst,type) edge for this tenant, then
-        # insert. A scheduled job re-sends all edges every run, so a plain INSERT would
-        # grow the table without bound; delete-then-insert keeps it stable and needs no
-        # unique constraint (works on pre-existing tables too). Dedupe the batch first.
+        # Idempotent by construction: the UNIQUE (tenant,src,dst,type) key from
+        # _ensure_link_key turns every write into an atomic upsert, so re-sending the
+        # full edge set each run (what a scheduled sync does) never adds rows.
+        # Dedupe the batch first — ON CONFLICT can't touch the same key twice.
         if not links:
             return
         dedup = {(l.src, l.dst, l.type): l for l in links}
-        with self._conn.cursor() as cur:
-            cur.executemany(
-                f"DELETE FROM {self.L} WHERE tenant=%s AND src=%s AND dst=%s AND type=%s",
-                [(self.tenant, s, d, t) for (s, d, t) in dedup])
+        with self._conn.transaction(), self._conn.cursor() as cur:
             cur.executemany(
                 f"INSERT INTO {self.L} (tenant,src,dst,type,weight,attrs) "
-                f"VALUES (%s,%s,%s,%s,%s,%s)",
+                f"VALUES (%s,%s,%s,%s,%s,%s) "
+                f"ON CONFLICT (tenant,src,dst,type) DO UPDATE SET "
+                f"weight=EXCLUDED.weight, attrs=EXCLUDED.attrs "
+                f"WHERE ({self.L}.weight, {self.L}.attrs) IS DISTINCT FROM "
+                f"(EXCLUDED.weight, EXCLUDED.attrs)",
                 [(self.tenant, l.src, l.dst, l.type, l.weight, json.dumps(l.attrs))
                  for l in dedup.values()])
 

@@ -68,8 +68,9 @@ def run() -> dict:
 
     atlas = Atlas(embedder=emb, store=store, llm=llm)
     stats = atlas.sync(nodes, links)   # embeds only changed/new; reuses unchanged
-    atlas.cluster()
-    atlas.narrate()
+    if stats["changed"] or not store.all_topics():
+        atlas.cluster()                # re-cluster/narrate only when content moved
+        atlas.narrate()
     return stats
 
 

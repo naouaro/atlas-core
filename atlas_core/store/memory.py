@@ -52,6 +52,9 @@ class InMemoryVectorStore(VectorStore):
         for i in ids:
             if self._nodes.pop(i, None) is not None:
                 n += 1
+        gone = set(ids)
+        self._links = {k: l for k, l in self._links.items()
+                       if l.src not in gone and l.dst not in gone}
         return n
 
     def upsert_links(self, links: list[Link]) -> None:

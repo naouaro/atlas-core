@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 semantic versioning.
 
+## [0.2.1]
+
+### Fixed
+- **Links are unique at the database level.** `PgVectorStore` now creates a UNIQUE
+  index on `(tenant, src, dst, type)` and `upsert_links` is a single atomic
+  `INSERT … ON CONFLICT DO UPDATE`. 0.2.0's delete-then-insert ran one unindexed
+  DELETE per edge (a full table scan each, so a sync slowed as the table grew), was
+  not atomic, and could still duplicate under concurrent runs.
+- **Existing duplicate links are collapsed automatically** the first time a store
+  opens a table written by an older version (one transactional rebuild under an
+  advisory lock — millions of rows in seconds; tenants stay separate).
+- **Pruning leaves no dangling links** — `delete_nodes` also removes edges touching
+  the deleted nodes (pgvector and in-memory stores).
+
+### Added
+- `(tenant, dst)` index so `links_for` no longer scans the table.
+- `Atlas.sync()` returns `changed`; the deploy template skips the costly
+  `cluster()` / `narrate()` pass when nothing was added, changed or pruned.
+
 ## [0.2.0]
 
 ### Added

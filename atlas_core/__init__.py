@@ -12,6 +12,6 @@ from .engine.glossary import Glossary, GlossaryEntry
 from .engine.pipeline import Atlas
 from .models import Link, Narrative, Node, Topic
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __all__ = ["Atlas", "Node", "Link", "Topic", "Narrative",
            "Glossary", "GlossaryEntry", "chunk_text", "__version__"]
